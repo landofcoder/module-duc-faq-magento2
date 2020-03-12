@@ -1,1 +1,0 @@
-/var/www/magento/lib/web/jquery/patches/jquery-ui.js
