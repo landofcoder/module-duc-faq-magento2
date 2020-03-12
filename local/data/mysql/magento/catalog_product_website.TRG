@@ -5,4 +5,4 @@ definers='magento@%' 'magento@%' 'magento@%'
 client_cs_names='utf8' 'utf8' 'utf8'
 connection_cl_names='utf8_general_ci' 'utf8_general_ci' 'utf8_general_ci'
 db_cl_names='latin1_swedish_ci' 'latin1_swedish_ci' 'latin1_swedish_ci'
-created=158398269432 158398269433 158398269434
+created=158399271162 158399271164 158399271165
