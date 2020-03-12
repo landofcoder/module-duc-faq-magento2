@@ -1,0 +1,8 @@
+setup-cron: Please check var/log/update.log for execution summary.
+setup-cron: Please check var/log/update.log for execution summary.
+setup-cron: Please check var/log/update.log for execution summary.
+setup-cron: Please check var/log/update.log for execution summary.
+setup-cron: Please check var/log/update.log for execution summary.
+setup-cron: Please check var/log/update.log for execution summary.
+
+Parse error: syntax error, unexpected '<', expecting end of file in /var/www/magento/app/etc/config.php on line 2

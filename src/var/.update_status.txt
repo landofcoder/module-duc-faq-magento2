@@ -1,0 +1,6 @@
+[2020-03-12 03:06:01 UTC] Magento is not installed.
+[2020-03-12 03:07:02 UTC] Magento is not installed.
+[2020-03-12 03:08:02 UTC] Magento is not installed.
+[2020-03-12 03:09:02 UTC] Magento is not installed.
+[2020-03-12 03:10:02 UTC] Magento is not installed.
+[2020-03-12 03:11:10 UTC] Magento is not installed.
