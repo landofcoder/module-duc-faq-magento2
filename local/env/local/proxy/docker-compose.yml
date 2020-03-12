@@ -1,0 +1,24 @@
+version: "2"
+services:
+    proxy:
+      image: traefik:1.7
+      command: -c /dev/null --web --docker --docker.domain=docker.loftraining.localhost --logLevel=DEBUG --configFile=/etc/traefik/conf/acme.toml
+      ports:
+        - "80:80"
+        - "8080:8080"
+        - "443:443"
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - ./certs:/certs
+        - ./traefik.toml:/etc/traefik/conf/acme.toml:ro
+        - ./acme.json:/etc/traefik/conf/acme.json:rw
+      labels:
+        - "traefik.frontend.rule=Host:proxy.docker.loftraining.localhost"
+        - "traefik.port=8080"
+        - "traefik.enable=true"   
+      networks:
+        - proxy
+networks:
+  proxy:
+    external:
+      name: proxy

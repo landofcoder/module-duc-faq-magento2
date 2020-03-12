@@ -1,0 +1,194 @@
+version: "2"
+services:
+  varnish:
+    image: meanbee/magento2-varnish:latest
+    environment:
+      - VIRTUAL_HOST=loftraining.docker
+      - VIRTUAL_PORT=80
+      - HTTPS_METHOD=noredirect
+    ports:
+      - 80
+    links:
+      - web
+
+  web:
+    image: meanbee/magento2-nginx:1.9
+    ports:
+      - 80
+    links:
+      - fpm
+      - db
+    volumes_from:
+      - appdata
+    env_file:
+      - ./global.env
+    labels:
+      - "traefik.frontend.rule=Host:loftraining.localhost"
+      - traefik.docker.network=proxy
+      - traefik.port=80
+    networks:
+      - proxy
+      - internal
+    #environment:
+      #- VIRTUAL_HOST=magento2.docker
+      #- VIRTUAL_PORT=80
+      #- HTTPS_METHOD=noredirect
+  
+  fpm:
+    hostname: fpm.loftraining.docker
+    image: meanbee/magento2-php:7.3-fpm
+    ports:
+      - 9000
+    links:
+      - db
+    volumes_from:
+      - appdata
+    volumes:
+      - ../common/php/zz-custom.ini:/usr/local/etc/php/conf.d/zz-custom.ini
+    env_file:
+      - ./global.env
+    networks:
+      - proxy
+      - internal
+
+  db:
+    image: mariadb:10.2
+    ports:
+      - 3306
+    volumes_from:
+      - dbdata
+    command: mysqld --innodb-buffer-pool-size=256M
+    environment:
+      - MYSQL_ROOT_PASSWORD=magento
+      - MYSQL_DATABASE=magento
+      - MYSQL_USER=magento
+      - MYSQL_PASSWORD=magento
+      - TERM=meh
+    networks:
+      - internal
+
+  cron:
+    image: meanbee/magento2-php:7.3-cli
+    hostname: cron.loftraining.localhost
+    command: run-cron
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - ./global.env    
+    environment:
+      CRONTAB: '* * * * * root cd /app && /usr/local/bin/php bin/magento cron:run >> /app/var/log/cron.log'
+    volumes_from:
+      - appdata
+    links:
+      - db
+    env_file:
+      - ./global.env 
+    networks:
+      - proxy
+      - internal
+    networks:
+      - internal
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    ports:
+      - 80
+    links:
+      - db
+    labels:
+      - "traefik.frontend.rule=Host:phpmyadmin.loftraining.localhost"
+      - traefik.docker.network=proxy
+      - traefik.port=80
+    networks:
+      - proxy
+      - internal
+
+  cli:
+    hostname: cli.loftraining.docker
+    image: meanbee/magento2-php:7.3-cli
+    links:
+      - db
+    volumes:
+      - ~/.composer/cache:/root/.composer/cache
+    command: ["chmod", "+x", "/usr/local/bin/magento-installer"]
+    volumes_from:
+      - appdata
+    env_file:
+      - ./global.env
+      - ./composer.env
+    environment:
+      - M2SETUP_INSTALL_DB=true
+      - M2SETUP_DB_HOST=db
+      - M2SETUP_DB_NAME=magento
+      - M2SETUP_DB_USER=magento
+      - M2SETUP_DB_PASSWORD=magento
+      - M2SETUP_BASE_URL=http://loftraining.localhost/
+      # - M2SETUP_SECURE_BASE_URL=https://magento2.docker/
+      - M2SETUP_BACKEND_FRONTNAME=adminredis
+      - M2SETUP_ADMIN_FIRSTNAME=Admin
+      - M2SETUP_ADMIN_LASTNAME=User
+      - M2SETUP_ADMIN_EMAIL=loftraining@gmail.com
+      - M2SETUP_ADMIN_USER=admin
+      - M2SETUP_ADMIN_PASSWORD=admin@123
+      - M2SETUP_VERSION=2.3.*
+      - M2SETUP_USE_SAMPLE_DATA=false
+      - M2SETUP_SOURCE_INCLUDE_SAMPLE_DATA=false
+      - M2SETUP_COMPOSER_INSTALL=false
+    networks:
+      - proxy
+      - internal
+
+  cron:
+    image: meanbee/magento2-php:7.3-cli
+    hostname: cron.loftraining.localhost
+    command: run-cron
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - ./global.env    
+    environment:
+      CRONTAB: '* * * * * root cd /app && /usr/local/bin/php bin/magento cron:run >> /app/var/log/cron.log'
+    volumes_from:
+      - appdata
+    links:
+      - db
+    env_file:
+      - ./global.env 
+    networks:
+      - proxy
+      - internal
+
+  redis:
+    image: 'redis:5.0'
+    volumes:
+      - ../../../data/redis:/data
+    ports:
+      - 6379
+    networks:
+      - proxy
+      - internal
+  
+  appdata:
+    image: tianon/true
+    volumes:
+      - ../../../src:/var/www/magento
+      - '../../../patches:/var/www/magento/patches'
+    networks:
+      - internal
+
+  dbdata:
+    image: tianon/true
+    volumes:
+      - ../../../data/mysql:/var/lib/mysql
+    networks:
+      - internal
+
+networks:
+  proxy:
+    external:
+      name: proxy
+  internal:
+    driver: bridge
+      
