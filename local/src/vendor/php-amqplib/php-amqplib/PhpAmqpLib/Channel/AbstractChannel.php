@@ -2,13 +2,9 @@
 namespace PhpAmqpLib\Channel;
 
 use PhpAmqpLib\Connection\AbstractConnection;
-use PhpAmqpLib\Exception\AMQPChannelClosedException;
-use PhpAmqpLib\Exception\AMQPConnectionClosedException;
-use PhpAmqpLib\Exception\AMQPInvalidFrameException;
-use PhpAmqpLib\Exception\AMQPNoDataException;
-use PhpAmqpLib\Exception\AMQPNotImplementedException;
 use PhpAmqpLib\Exception\AMQPOutOfBoundsException;
 use PhpAmqpLib\Exception\AMQPOutOfRangeException;
+use PhpAmqpLib\Exception\AMQPRuntimeException;
 use PhpAmqpLib\Helper\DebugHelper;
 use PhpAmqpLib\Helper\Protocol\MethodMap080;
 use PhpAmqpLib\Helper\Protocol\MethodMap091;
@@ -17,20 +13,14 @@ use PhpAmqpLib\Helper\Protocol\Protocol091;
 use PhpAmqpLib\Helper\Protocol\Wait080;
 use PhpAmqpLib\Helper\Protocol\Wait091;
 use PhpAmqpLib\Message\AMQPMessage;
-use PhpAmqpLib\Wire;
 use PhpAmqpLib\Wire\AMQPReader;
 
 abstract class AbstractChannel
 {
-    /**
-     * @deprecated
-     */
-    const PROTOCOL_080 = Wire\Constants080::VERSION;
+    const PROTOCOL_080 = '0.8';
+    const PROTOCOL_091 = '0.9.1';
 
-    /**
-     * @deprecated
-     */
-    const PROTOCOL_091 = Wire\Constants091::VERSION;
+    public static $PROTOCOL_CONSTANTS_CLASS;
 
     /** @var array */
     protected $frame_queue;
@@ -41,8 +31,8 @@ abstract class AbstractChannel
     /** @var bool */
     protected $auto_decode;
 
-    /** @var Wire\Constants */
-    protected $constants;
+    /** @var string */
+    protected $amqp_protocol_header;
 
     /** @var \PhpAmqpLib\Helper\DebugHelper */
     protected $debug;
@@ -68,13 +58,13 @@ abstract class AbstractChannel
     /** @var string */
     protected $channel_id;
 
-    /** @var AMQPReader */
+    /** @var \PhpAmqpLib\Wire\AMQPReader */
     protected $msg_property_reader;
 
-    /** @var AMQPReader */
+    /** @var \PhpAmqpLib\Wire\AMQPReader */
     protected $wait_content_reader;
 
-    /** @var AMQPReader */
+    /** @var \PhpAmqpLib\Wire\AMQPReader */
     protected $dispatch_reader;
 
     /**
@@ -97,26 +87,30 @@ abstract class AbstractChannel
 
         $this->protocolVersion = self::getProtocolVersion();
         switch ($this->protocolVersion) {
-            case Wire\Constants091::VERSION:
-                $constantClass = Wire\Constants091::class;
+            case self::PROTOCOL_091:
+                self::$PROTOCOL_CONSTANTS_CLASS = 'PhpAmqpLib\Wire\Constants091';
+                $c = self::$PROTOCOL_CONSTANTS_CLASS;
+                $this->debug = new DebugHelper($c);
+                $this->amqp_protocol_header = $c::$AMQP_PROTOCOL_HEADER;
                 $this->protocolWriter = new Protocol091();
                 $this->waitHelper = new Wait091();
                 $this->methodMap = new MethodMap091();
                 break;
-            case Wire\Constants080::VERSION:
-                $constantClass = Wire\Constants080::class;
+            case self::PROTOCOL_080:
+                self::$PROTOCOL_CONSTANTS_CLASS = 'PhpAmqpLib\Wire\Constants080';
+                $c = self::$PROTOCOL_CONSTANTS_CLASS;
+                $this->debug = new DebugHelper($c);
+                $this->amqp_protocol_header = $c::$AMQP_PROTOCOL_HEADER;
                 $this->protocolWriter = new Protocol080();
                 $this->waitHelper = new Wait080();
                 $this->methodMap = new MethodMap080();
                 break;
             default:
-                throw new AMQPNotImplementedException(sprintf(
+                throw new AMQPRuntimeException(sprintf(
                     'Protocol: %s not implemented.',
                     $this->protocolVersion
                 ));
         }
-        $this->constants = new $constantClass;
-        $this->debug = new DebugHelper($this->constants);
     }
 
     /**
@@ -125,9 +119,9 @@ abstract class AbstractChannel
      */
     public static function getProtocolVersion()
     {
-        $protocol = defined('AMQP_PROTOCOL') ? AMQP_PROTOCOL : Wire\Constants091::VERSION;
+        $protocol = defined('AMQP_PROTOCOL') ? AMQP_PROTOCOL : self::PROTOCOL_091;
         //adding check here to catch unknown protocol ASAP, as this method may be called from the outside
-        if (!in_array($protocol, array(Wire\Constants080::VERSION, Wire\Constants091::VERSION), TRUE)) {
+        if (!in_array($protocol, array(self::PROTOCOL_080, self::PROTOCOL_091), TRUE)) {
             throw new AMQPOutOfRangeException(sprintf('Protocol version %s not implemented.', $protocol));
         }
 
@@ -191,7 +185,7 @@ abstract class AbstractChannel
     public function dispatch($method_sig, $args, $amqpMessage)
     {
         if (!$this->methodMap->valid_method($method_sig)) {
-            throw new AMQPNotImplementedException(sprintf(
+            throw new AMQPRuntimeException(sprintf(
                 'Unknown AMQP method "%s"',
                 $method_sig
             ));
@@ -200,7 +194,7 @@ abstract class AbstractChannel
         $amqp_method = $this->methodMap->get_method($method_sig);
 
         if (!method_exists($this, $amqp_method)) {
-            throw new AMQPNotImplementedException(sprintf(
+            throw new AMQPRuntimeException(sprintf(
                 'Method: "%s" not implemented by class: %s',
                 $amqp_method,
                 get_class($this)
@@ -217,7 +211,7 @@ abstract class AbstractChannel
     }
 
     /**
-     * @param int|float|null $timeout
+     * @param int $timeout
      * @return array|mixed
      */
     public function next_frame($timeout = 0)
@@ -238,7 +232,7 @@ abstract class AbstractChannel
     protected function send_method_frame($method_sig, $args = '')
     {
         if ($this->connection === null) {
-            throw new AMQPChannelClosedException('Channel connection is closed.');
+            throw new AMQPRuntimeException('Channel connection is closed.');
         }
 
         $this->connection->send_channel_method_frame($this->channel_id, $method_sig, $args);
@@ -322,11 +316,9 @@ abstract class AbstractChannel
      *
      * @param array $allowed_methods
      * @param bool $non_blocking
-     * @param int|float|null $timeout
+     * @param int $timeout
      * @throws \PhpAmqpLib\Exception\AMQPOutOfBoundsException
      * @throws \PhpAmqpLib\Exception\AMQPRuntimeException
-     * @throws \PhpAmqpLib\Exception\AMQPTimeoutException
-     * @throws \ErrorException
      * @return mixed
      */
     public function wait($allowed_methods = null, $non_blocking = false, $timeout = 0)
@@ -338,24 +330,9 @@ abstract class AbstractChannel
             return $this->dispatch_deferred_method($deferred['queued_method']);
         }
 
-        // timeouts must be deactivated for non-blocking actions
-        if (true === $non_blocking) {
-            $timeout = null;
-        }
-
         // No deferred methods?  wait for new ones
         while (true) {
-            try {
-                list($frame_type, $payload) = $this->next_frame($timeout);
-            } catch (AMQPNoDataException $e) {
-                // no data ready for non-blocking actions - stop and exit
-                break;
-            } catch (AMQPConnectionClosedException $exception) {
-                if ($this instanceof AMQPChannel) {
-                    $this->do_close();
-                }
-                throw $exception;
-            }
+            list($frame_type, $payload) = $this->next_frame($timeout);
 
             $this->validate_method_frame($frame_type);
             $this->validate_frame_payload($payload);
@@ -419,7 +396,7 @@ abstract class AbstractChannel
 
     /**
      * @param int $frame_type
-     * @throws \PhpAmqpLib\Exception\AMQPInvalidFrameException
+     * @throws \PhpAmqpLib\Exception\AMQPRuntimeException
      */
     protected function validate_method_frame($frame_type)
     {
@@ -428,7 +405,7 @@ abstract class AbstractChannel
 
     /**
      * @param int $frame_type
-     * @throws \PhpAmqpLib\Exception\AMQPInvalidFrameException
+     * @throws \PhpAmqpLib\Exception\AMQPRuntimeException
      */
     protected function validate_header_frame($frame_type)
     {
@@ -437,7 +414,7 @@ abstract class AbstractChannel
 
     /**
      * @param int $frame_type
-     * @throws \PhpAmqpLib\Exception\AMQPInvalidFrameException
+     * @throws \PhpAmqpLib\Exception\AMQPRuntimeException
      */
     protected function validate_body_frame($frame_type)
     {
@@ -452,11 +429,12 @@ abstract class AbstractChannel
     protected function validate_frame($frameType, $expectedType, $expectedMessage)
     {
         if ($frameType != $expectedType) {
-            throw new AMQPInvalidFrameException(sprintf(
+            $protocolClass = self::$PROTOCOL_CONSTANTS_CLASS;
+            throw new AMQPRuntimeException(sprintf(
                     'Expecting %s, received frame type %s (%s)',
                     $expectedMessage,
                     $frameType,
-                    $this->constants->getFrameType($frameType)
+                    $protocolClass::$FRAME_TYPES[$frameType]
                 ));
         }
     }
@@ -499,9 +477,11 @@ abstract class AbstractChannel
      */
     protected function should_dispatch_method($allowed_methods, $method_sig)
     {
+        $protocolClass = self::$PROTOCOL_CONSTANTS_CLASS;
+
         return $allowed_methods == null
             || in_array($method_sig, $allowed_methods)
-            || $this->constants->isCloseMethod($method_sig);
+            || in_array($method_sig, $protocolClass::$CLOSE_METHODS);
     }
 
     /**
@@ -510,8 +490,10 @@ abstract class AbstractChannel
      */
     protected function maybe_wait_for_content($method_sig)
     {
+        $protocolClass = self::$PROTOCOL_CONSTANTS_CLASS;
         $amqpMessage = null;
-        if ($this->constants->isContentMethod($method_sig)) {
+
+        if (in_array($method_sig, $protocolClass::$CONTENT_METHODS)) {
             $amqpMessage = $this->wait_content();
         }
 

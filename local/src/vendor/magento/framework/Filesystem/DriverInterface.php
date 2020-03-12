@@ -22,14 +22,14 @@ interface DriverInterface
      *
      * @deprecated
      */
-    const WRITEABLE_DIRECTORY_MODE = 0770;
+    const WRITEABLE_DIRECTORY_MODE = 0775;
 
     /**
      * Permissions to give read/write access to owner and owning group, but not to all users
      *
      * @deprecated
      */
-    const WRITEABLE_FILE_MODE = 0660;
+    const WRITEABLE_FILE_MODE = 0664;
 
     /**
      *

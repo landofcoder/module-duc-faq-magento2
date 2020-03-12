@@ -502,9 +502,6 @@ class AMQPWriter extends AbstractClient
                 break;
             case AMQPAbstractCollection::T_VOID:
                 break;
-            case AMQPAbstractCollection::T_BYTES:
-                $this->write_longstr($val);
-                break;
             default:
                 throw new AMQPInvalidArgumentException(sprintf(
                     'Unsupported type "%s"',
