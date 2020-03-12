@@ -22,6 +22,7 @@ class InstallSchema implements InstallSchemaInterface
         SchemaSetupInterface $setup,
         ModuleContextInterface $context
     ) {
+
         $installer = $setup;
         $installer->startSetup();
         if (!$installer->tableExists('ducpa233_faq')) {
@@ -92,6 +93,8 @@ class InstallSchema implements InstallSchemaInterface
             );
         }
         $installer->endSetup();
-    }
+
+        //Your install script
+
 }
 
